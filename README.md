@@ -2,7 +2,7 @@
 ![Selection_004](https://github.com/user-attachments/assets/6f381469-fc62-450d-85b3-b8f7bd2dc031)
 
 ## 1. Memeriksa VPC
-![Selection_005](https://github.com/user-attachments/assets/e2a28622-488b-4284-83b1-f6d0fb9d20a8)iiiiiiiiiiii
+![Selection_005](https://github.com/user-attachments/assets/e2a28622-488b-4284-83b1-f6d0fb9d20a8)
 - Buka AWS Console
 - Cari VPC Service
 - Check pada isw-vpc
