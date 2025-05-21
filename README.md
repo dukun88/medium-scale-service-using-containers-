@@ -2,7 +2,7 @@
 ![Selection_004](https://github.com/user-attachments/assets/6f381469-fc62-450d-85b3-b8f7bd2dc031)
 
 ## 1. Memeriksa VPC
-![Selection_005](https://github.com/user-attachments/assets/e2a28622-488b-4284-83b1-f6d0fb9d20a8)
+![Selection_005](https://github.com/user-attachments/assets/e2a28622-488b-4284-83b1-f6d0fb9d20a8)iiiiiiiiiiii
 - Buka AWS Console
 - Cari VPC Service
 - Check pada isw-vpc
@@ -393,4 +393,234 @@
 - Ulangi langkah tadi untuk membuat task definition untuk backend
 - jangan lupa untuk mengganti nama, image url, dan port mappings
 
+## 9. Membuat service di Cluster ECS
 
+![Selection_016](https://github.com/user-attachments/assets/46c53c7a-e5ed-4ae8-a88f-1a7d5009c66b)
+
+- Cari  ECS service di AWS Console
+
+*Cara Pertama*
+- Pilih cluster yang akan di buatkan Service
+- Pilih Create pada kolom "Services"
+
+    **Environtment**
+  
+    Biarkan default pada bagian compute configuration
+
+    **Deployment configuration**
+
+    Application type = Service
+
+    Family = my-ecs-frontend-task-definition
+
+    Version = 1(Latest)
+
+    Service Name = my-ecs-frontend-svc
+
+    Desired task = 1
+
+    *pilih opsi load balancing*
+
+    **Load balancing**
+
+    Load balancing type = Application Load balancer
+
+    Container = fc_frontend
+
+    Loadbalancer = my-ecs-lb
+
+    Listener = Use Existing listener
+
+    Listener = 443HTTPS
+
+    Target Group = Use existing target group
+
+    Target group name = my-ecs-frontend-80
+
+    "Create"
+
+*Cara Kedua*
+
+- Masuk ke bagian 'Task Definition'
+- Pilih Task Definition Backend
+- Masuk ke Rev 1
+- Pilih 'Service' Pada dropdown 'Deploy'
+
+  **Lakukan kembali langkah pada saat pembuatan service frontend**
+
+  *Jangan lupa untuk mengganti attribut yang di butuhkan menjadi bacend*
+
+- Cek kembali cluster yang sudah terbuat 2 service
+- Jika Sudah up/Running kedua service coba akses website manggunakan domain yang sudah di daftarkan di Route53
+
+## 10. Pembuatan cloudfront dan Integrasi ELB
+
+![Selection_017](https://github.com/user-attachments/assets/11041bf3-da64-469a-9492-d43dca4f8765)
+
+- Cari ACM pada AWS Console
+- Cek dan pastikan sertifikat ACM terdapat pada regian global (US)
+- Cari Cloudfront pada AWS Console
+- Create Distribution
+
+  **Origin**
+
+  Origin domain = *(Copy-Paste domainyang terdapat pada loadbalancers)*
+
+  Protocol = HTTP only
+
+  *Biarakan default settingan yg lain*
+
+  **Default cache behavior**
+
+  Viewer protocol policy = Redirect HTTP to HTTPS
+
+  Cache and origin request = Legacy cache setting
+
+  *Biarakan default settingan yg lain*
+
+  **Web application firewall (WAF)**
+
+  Pilih "Do not enable security protections"
+
+  **Setting**
+
+  Costum SSL certificate = Pilih sertifikat global yang sudah terbuat
+
+  *Biarkan default settingan yang lain*
+
+  "Create Distribution"
+
+- Ubah dan tambahkan rule pada loadbalancer HTTP(80)
+- Coba akses halaman
+
+## 11. Menyiapkan Record route53
+
+![Selection_018](https://github.com/user-attachments/assets/9565cd1c-afb3-4e69-aa7f-97cc5c56a4d0)
+
+- Cari Route53 pada AWS console
+- Masuk ke DNS management
+- Pilih domain yang sudah di pakai
+- Pilih domain yang akan di arahkan ke cloudfront
+- "Edit Records"
+
+  Route traffic to = *Arahkan ke cloudfront yang lita buat*
+
+  Choose Distribution = ecs-fastcampuss
+
+  "Save"
+
+- Coba test buka domain dari Route53
+- Patikan domain mengarah ke Cloudfront
+
+## 12. CI/CD Menggunakan AWS CodeSeries
+
+![Selection_019](https://github.com/user-attachments/assets/a49e6e84-3d61-4cbf-a9f8-e93fb478aca8)
+
+- Buka cloud9 Dan mauk ke directory frontend
+- Buat file "buildspec.yml"
+
+  ```
+    version: 0.2
+    
+    phases:
+      pre_build:
+        commands:
+          - echo Logging in to Amazon ECR...
+          - aws --version
+          - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin 111122223333.dkr.ecr.us-west-2.amazonaws.com
+          - REPOSITORY_URI=012345678910.dkr.ecr.us-west-2.amazonaws.com/hello-world
+          - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+          - IMAGE_TAG=${COMMIT_HASH:=latest}
+      build:
+        commands:
+          - echo Build started on `date`
+          - echo Building the Docker image...
+          - docker build -t $REPOSITORY_URI:latest .
+          - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+      post_build:
+        commands:
+          - echo Build completed on `date`
+          - echo Pushing the Docker images...
+          - docker push $REPOSITORY_URI:latest
+          - docker push $REPOSITORY_URI:$IMAGE_TAG
+          - echo Writing image definitions file...
+          - printf '[{"name":"hello-world","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+    artifacts:
+        files: imagedefinitions.json
+
+  ```
+- Ubah bagian 'aws ecr get-login-password' dengan link yang terdapat pada ECR
+    
+![Selection_008](https://github.com/user-attachments/assets/6bea35d2-c717-4507-89a8-b548748f0138)
+
+- Ubah juga bagian 'REPOSITORY_URI=' menggunakan URI ECR
+- Dan beri nama pada bagian " printf '[{"name":"hello-world","imageUri":"%s"}]' "
+- Commit dan Push github
+  ```
+  
+    git add .
+    git commit -m "add buildspec"
+    git push
+    
+  ```
+- Setup codebuild
+- Cari Codebuild pada AWS console
+- "Cretae project"
+
+  **Project configuration**
+
+  Project name = frontend-codebuild
+
+  **Source**
+
+  Source 1 - primary
+
+  Source provider = Github
+
+  *jika belum terhubung silahkan hubungkan akun github dengan menggunakan token*
+
+  Repository = Repository in my github account
+
+  Github repository = (Link repo frontend)
+
+  **Environtment**
+
+  Environtment image = Managed image
+
+  Operating sistem = Amazon Linux
+
+  Runtime = Standard
+
+  Image = default
+
+  Image version = default
+
+  Service role = New service role
+
+  Role name = default
+
+  *Drop Additional Configuration*
+
+  Ceklis pada bagian "Privileged"
+
+  **Buildspec**
+
+  Build specifications = Use a buildspec file
+
+  buildspec name = buildspec.yml
+
+  *Biarkan default settingan lainya*
+
+  "Create Build Project"
+
+- Buat juga Project dan buildspec.yml untuk backend dengan langkah yang sama
+- Jangan lupa untuk mengubah dan push git code pada buildspec.yml
+- Memberikan akses untuk codebuild
+- Cari IAM Pada AWS console
+- Masuk ke bagian Roles
+- Pilih codebuild-service-role (fronend/backend)
+- "add permissions"
+- Attach policies
+- Cari dan pilih ECR
+- "Add permissions"
+- Coba start build yang sudah terbuat
