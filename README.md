@@ -563,7 +563,7 @@
     git push
     
   ```
-- Setup codebuild
+### Setup codebuild
 - Cari Codebuild pada AWS console
 - "Cretae project"
 
