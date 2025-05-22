@@ -624,3 +624,394 @@
 - Cari dan pilih ECR
 - "Add permissions"
 - Coba start build yang sudah terbuat
+- Cek apakah sudah terdaftar atau ter-build di halaman ECR
+
+### Setup CodeDeploy
+
+- Setup permission iam
+- Cari IAM pada AWS console
+- Masuk ke Bagian 'Roles'
+- "Create role"
+
+  **Trusted entity type**
+
+  Pilih AWS service
+  
+  **Use case**
+
+  Source of use case = CodeDeploy
+
+  Specified = CodeDeploy ECS
+
+  "Next"
+
+  **Add permissions**
+
+  *Biarkann default*
+
+  "Next"
+
+  **Role details**
+
+  Role name = codedeploy-ecs-role
+
+  Description = default
+  
+  "Create"
+
+- Setup target group
+- Cari Target Gruop di AWS console
+- "Create target group"
+
+  **Basic configuration**
+
+  Choose Target group = Instance
+
+  Target group name = my-ecs-frontend-build-80
+
+  Protocol-Port = HTTP (80)
+
+  IP address type = IPv4
+
+  VPC = isw-vpc
+
+  Protocol version = HTTP1
+
+  **Health Checks**
+
+  Health check protocol = HTTP
+
+  Health check path = /
+
+  "Next"
+
+  "Create"
+
+- Buat juga untuk backend dengan langkah yang sama
+- Edit loadbalancers
+- Masuk ke loadbalancers
+- pilih "my-ecs-lb"
+- "Add Listener"
+
+  **LIstener Details**
+
+  Protocol-Port = HTTPS (8443)
+
+  Routing Actions = Forward to target groups
+
+  Target group = my-ecs-frontend-deploy-80
+
+  **Secure listener settings**
+
+  Certtificate Source = From ACM
+
+  Certificate = Pilih certificate yang sudah terbuat dahulu
+
+  "Add"
+
+- Membuat Deployment
+- Masuk ke ECR dan pilih Service
+- "Create"
+
+  **Environtment**
+
+  *Biarkan menggunakan settingan default*
+
+  **Deploy Configuration**
+
+  Application type = Service
+
+  Family = My-ecs-frontend-tg
+
+  Version = 1(Latest)
+
+  Service name = my-ecs-frontend-deploy-svc
+
+  Service type = Replica
+
+  **Deployment Options**
+
+  Deployment type = BlueGreeen deployment powered by CodeDeploy
+
+  Dployment configuration = CodeDeployDefaultECS
+
+  Service role for CodeDeploy = codedeploy-ecs-role
+
+  **Load Balancing**
+
+  Load balancing type = Application loadbalancers
+
+  Container = fc_frontend 8080
+
+  loadbalancers = my-ecs-lb
+
+  ***Test Listener**
+
+  pilih add a test listener
+
+  "Use existing listener"
+
+  Test listener = 8443 HTTPS
+
+  ***Target Group***
+
+  Target group 1 = Use existing target group
+
+  Target group 1 name = my-ecs-frontend-80
+
+  Target group 2 = Use existing target group
+
+  Target group 2 name = my-ecs-frontend-deploy-8080
+
+  "Create"
+
+- Tunggu sampai sukses terbuat
+- Check ke service CodeDeploy
+- Pilih bagian Apps
+- Jika sudah tersedia lanjut membuat Deployment
+- Buat File baru bernama "appspec.yml"
+
+  ```
+  version: 0.0
+    Resources:
+      - TargetService:
+          Type: AWS::ECS::Service
+          Properties:
+            TaskDefinition: "arn:aws:ecs:us-east-1:111222333444:task-definition/my-task-definition-family-name:1"
+            LoadBalancerInfo:
+              ContainerName: "SampleApplicationName"
+              ContainerPort: 80
+  ```
+
+- Ubah pada bagian 'TaskDefinition' menggunakan TaskDefiniton yg sudah kita buat
+
+![Selection_020](https://github.com/user-attachments/assets/e02a8790-1f06-47cc-a9fe-e8d16dee373c)
+
+- Ubah juga nama container dengan "fc_frontend"
+- Buat Bucket S3 untuk menyimpan file appspec.yml
+- Cari S3 di AWS console
+- "Create Bucket"
+
+  **General configuration**
+
+  AWS region = asia pasific (Jakarta)ap-southeast-3
+
+  Bucket name = isw-appspec-bucket
+
+  *Biarkan default settingan lainya*
+
+  "Create"
+
+- Cek apakah sudah terbuat
+- Jika sudah terbuat "upload" file appspec.yml
+- Coba jalankan distribusi CodeDeploy
+- Cari Codedeploy pada console AWS
+- Masuk ke "Applications'
+- Pilih app "AppECS-my-ecs-cluster:my-ecs-deploy-svc"
+- Mausk ke bagian deployment
+- "Create deployments"
+
+  **Deployment Settings**
+
+  Applicatiopn = AppECS-my-ecs-cluster:my-ecs-deploy-svc
+
+  Deployment group = *pilih deployment yg sudah tersedia*
+
+  Revision Location = *copy-paste URI file appspec.yml dari S3*
+
+  "Create Deployment"
+
+- Tunggu hingga proses dployment selesai
+
+### Setup CodePipeline
+
+- Masuk ke directory file di Cloud9
+- Buat file "TaskDef.json"
+- Masukan informasi yang terdapat pada Task definition
+  ```
+      {
+        "taskDefinitionArn": "arn:aws:ecs:ap-southeast-3:675327529402:task-definition/my-ecs-frontend-td:3",
+        "containerDefinitions": [
+            {
+                "name": "fc_frontend",
+                "image": "675327529402.dkr.ecr.ap-southeast-3.amazonaws.com/fc_frontend",
+                "cpu": 0,
+                "portMappings": [
+                    {
+                        "name": "fc_frontend-80-tcp",
+                        "containerPort": 80,
+                        "hostPort": 80,
+                        "protocol": "tcp",
+                        "appProtocol": "http"
+                    }
+                ],
+                "essential": true,
+                "environment": [],
+                "environmentFiles": [],
+                "mountPoints": [],
+                "volumesFrom": [],
+                "ulimits": [],
+                "healthCheck": {
+                    "command": [
+                        "CMD-SHELL",
+                        "curl -f http://localhost/ || exit 1"
+                    ],
+                    "interval": 5,
+                    "timeout": 5,
+                    "retries": 3
+                },
+                "systemControls": []
+            }
+        ],
+        "family": "my-ecs-frontend-td",
+        "executionRoleArn": "arn:aws:iam::675327529402:role/ecsTaskExecutionRole",
+        "networkMode": "bridge",
+        "revision": 3,
+        "volumes": [],
+        "status": "ACTIVE",
+        "requiresAttributes": [
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.24"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.ecr-auth"
+            },
+            {
+                "name": "ecs.capability.container-health-check"
+            },
+            {
+                "name": "ecs.capability.execution-role-ecr-pull"
+            },
+            {
+                "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+            }
+        ],
+        "placementConstraints": [],
+        "compatibilities": [
+            "EC2"
+        ],
+        "requiresCompatibilities": [
+            "EC2"
+        ],
+        "cpu": "1024",
+        "memory": "1024",
+        "runtimePlatform": {
+            "cpuArchitecture": "X86_64",
+            "operatingSystemFamily": "LINUX"
+        },
+        "registeredAt": "2024-04-24T23:26:30.230Z",
+        "registeredBy": "arn:aws:iam::675327529402:user/ibnu"
+    }
+  ```
+- Ubah juga file "buildspec.yml"
+
+  ```
+  version: 0.2
+
+      phases:
+        pre_build:
+          commands:
+            - echo Logging in to Amazon ECR...
+            - aws --version
+            - aws ecr get-login-password --region ap-southeast-3 | docker login --username AWS --password-stdin 675327529402.dkr.ecr.ap-southeast-3.amazonaws.com
+            - REPOSITORY_URI=675327529402.dkr.ecr.ap-southeast-3.amazonaws.com/fc_frontend
+            - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+            - IMAGE_TAG=${COMMIT_HASH:=latest}
+        build:
+          commands:
+            - echo Build started on `date`
+            - echo Building the Docker image...
+            - docker build -t $REPOSITORY_URI:latest .
+            - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+        post_build:
+          commands:
+            - echo Build completed on `date`
+            - echo Pushing the Docker images...
+            - docker push $REPOSITORY_URI:latest
+            - docker push $REPOSITORY_URI:$IMAGE_TAG
+            - echo Writing image definitions file...
+            - printf '[{"name":"fc_frontend","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      artifacts:
+          files:
+            - 'image*.json'
+            - 'appspec.yaml'
+            - 'taskdef.json'
+          secondary-artifacts:
+            DefinitionArtifact:
+              files:
+                - appspec.yaml
+                - taskdef.json
+            ImageArtifact:
+              files:
+                - imagedefinitions.json
+   ```
+- Commit and push github
+  
+   ```
+    git add .
+    git commit -m "add taskdef"
+    git push
+    
+   ```
+
+- Buat Pipeline di AWS
+- Cari CodePipeline di Console AWS
+- "Create Pipeline"
+
+  **Pipeline Settings**
+
+  Pipeline name = fc-frontend-pipeline
+
+  *biarkan default settingan lainya*
+
+  "Next"
+
+  **Source**
+
+  Source provider = Github (version-1)
+
+  "Connect to github"
+
+  Repository = fc_frontend
+
+  Branch = main
+
+  Change directors = AWS CodePipeline
+
+  "Next"
+
+  **Build**
+
+  Build Provider = AWS CodeBuild
+
+  Region = Asia pasific (Jakarta)
+
+  Project name = fc-frontend-codebuild
+
+  Build type = Single build
+
+  "Next"
+
+  **Deploy**
+
+  Deploy provider = Amazon ECS Blue/green
+
+  Region = Asia Pasific (Jakarta)
+
+  AWS CodeDeploy Application name = AppECS-my-ecs-cluster:my-ecs-deploy-svc
+
+  AWS CodeDeploy deployment group = *pilih deployment group yang tersedia*
+
+  Amazon ECS Task definition = taskdef.json
+
+  AWS CodeDeploy AppSpec file = appspec.yml
+
+  "Next"
+
+  "Create Pipeline"
+
+- Tunggu hingga proses CI/CD selesai
+
+
+
+  
